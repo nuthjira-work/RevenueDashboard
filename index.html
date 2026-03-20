@@ -153,7 +153,7 @@
     </div>
     <div class="projects-grid" id="projectsGrid"></div>
   </main>
-  <footer>Revenue Monitoring Dashboard · Google Sheets Live Data · Last updated: <span id="lastUpdated">—</span></footer>
+  <footer>Revenue Monitoring Dashboard · ราคาขายสุทธิ (Column G) · Google Sheets Live Data · Last updated: <span id="lastUpdated">—</span></footer>
 </div>
 
 <script>
@@ -230,11 +230,11 @@ function parseCSV(csvText) {
     const cells = parseCSVLine(lines[i]);
     if (cells.length < 8) continue;
 
-    // B=col1(year), C=col2(month), D=col3(project), H=col7(contract_price)
+    // B=col1(year), C=col2(month), D=col3(project), G=col6(ราคาขายสุทธิ)
     const yearVal    = cells[1];
     const monthVal   = cells[2];
     const projectVal = cells[3];
-    const priceVal   = cells[7];
+    const priceVal   = cells[6];
 
     const year     = parseInt(yearVal);
     const monthTh  = (monthVal||'').toString().trim();
