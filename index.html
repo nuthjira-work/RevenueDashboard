@@ -139,6 +139,11 @@
   .pw-btn{width:100%;padding:14px;border-radius:12px;border:none;background:linear-gradient(135deg,var(--accent),#0099cc);color:#000;font-family:'Syne',sans-serif;font-size:14px;font-weight:800;cursor:pointer;letter-spacing:0.5px;transition:opacity 0.2s,transform 0.15s;margin-top:4px;}
   .pw-btn:hover{opacity:0.9;transform:translateY(-1px);}
   .pw-error{font-size:12px;color:var(--danger);text-align:center;margin-top:12px;font-weight:600;min-height:18px;}
+
+  /* ── Price Toggle ── */
+  .price-toggle{display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:4px;gap:0;}
+  .price-tab{padding:5px 12px;border-radius:7px;border:none;background:transparent;color:var(--muted);font-family:'Syne',sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:all 0.2s;white-space:nowrap;letter-spacing:0.3px;}
+  .price-tab.active{background:linear-gradient(135deg,#f59e0b,#ef4444);color:#000;}
 </style>
 </head>
 <body>
@@ -182,6 +187,10 @@
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
         Refresh
       </button>
+      <div class="price-toggle">
+        <button class="price-tab active" id="tabContract" onclick="setPriceMode('contract')">ราคาหน้าสัญญา</button>
+        <button class="price-tab" id="tabNet" onclick="setPriceMode('net')">ราคาสุทธิ</button>
+      </div>
       <div class="year-tabs" id="yearTabs"></div>
     </div>
   </header>
@@ -271,17 +280,19 @@ function parseCSV(csvText) {
     const cells = parseCSVLine(lines[i]);
     if (cells.length < 8) continue;
 
-    // B=col1(year), C=col2(month), D=col3(project), H=col7(contract_price)
-    const yearVal    = cells[1];
-    const monthVal   = cells[2];
-    const projectVal = cells[3];
-    const priceVal   = cells[7];
+    // B=col1(year), C=col2(month), D=col3(project), G=col6(ราคาหน้าสัญญา), H=col7(ราคาสุทธิ)
+    const yearVal     = cells[1];
+    const monthVal    = cells[2];
+    const projectVal  = cells[3];
+    const contractVal = cells[6]; // G = ราคาหน้าสัญญา
+    const netVal      = cells[7]; // H = ราคาสุทธิ
 
-    const year     = parseInt(yearVal);
-    const monthTh  = (monthVal||'').toString().trim();
-    const project  = (projectVal||'').toString().trim();
-    const revenue  = parseFloat((priceVal||'').replace(/,/g,'')) || 0;
-    const monthNum = MONTH_MAP[monthTh];
+    const year        = parseInt(yearVal);
+    const monthTh     = (monthVal||'').toString().trim();
+    const project     = (projectVal||'').toString().trim();
+    const contractRev = parseFloat((contractVal||'').replace(/,/g,'')) || 0;
+    const netRev      = parseFloat((netVal||'').replace(/,/g,'')) || 0;
+    const monthNum    = MONTH_MAP[monthTh];
 
     if (!year || isNaN(year) || !project || !monthNum) continue;
 
@@ -290,8 +301,9 @@ function parseCSV(csvText) {
 
     if (!IDX[year]) IDX[year] = {};
     if (!IDX[year][project]) IDX[year][project] = {};
-    if (!IDX[year][project][monthNum]) IDX[year][project][monthNum] = {rev:0, units:0};
-    IDX[year][project][monthNum].rev   += revenue;
+    if (!IDX[year][project][monthNum]) IDX[year][project][monthNum] = {contract:0, net:0, units:0};
+    IDX[year][project][monthNum].contract += contractRev;
+    IDX[year][project][monthNum].net      += netRev;
     IDX[year][project][monthNum].units += 1;
   }
 
@@ -306,13 +318,25 @@ function showError(msg) {
   el.innerHTML = `⚠️ ${msg}`;
 }
 
+// ── PRICE MODE ────────────────────────────────────────────────────────────────
+let priceMode = 'contract'; // 'contract' = ราคาหน้าสัญญา (G), 'net' = ราคาสุทธิ (H)
+
+function setPriceMode(mode) {
+  priceMode = mode;
+  document.getElementById('tabContract').classList.toggle('active', mode === 'contract');
+  document.getElementById('tabNet').classList.toggle('active', mode === 'net');
+  render();
+}
+
 // ── DATA HELPERS ──────────────────────────────────────────────────────────────
-const ge     = (y,p,m) => IDX[y]?.[p]?.[m] || {rev:0,units:0};
-const grev   = (y,p,m) => ge(y,p,m).rev;
+const ge     = (y,p,m) => IDX[y]?.[p]?.[m] || {contract:0, net:0, units:0};
+const grev   = (y,p,m) => ge(y,p,m)[priceMode];
 const gunit  = (y,p,m) => ge(y,p,m).units;
-const gpt    = (y,p)   => Object.values(IDX[y]?.[p]||{}).reduce((a,b)=>({rev:a.rev+b.rev,units:a.units+b.units}),{rev:0,units:0});
-const gmt    = (y,m)   => allProjects.reduce((a,p)=>{const e=ge(y,p,m);return{rev:a.rev+e.rev,units:a.units+e.units};},{rev:0,units:0});
-const gyt    = y       => allProjects.reduce((a,p)=>{const t=gpt(y,p);return{rev:a.rev+t.rev,units:a.units+t.units};},{rev:0,units:0});
+const gpt    = (y,p)   => Object.values(IDX[y]?.[p]||{}).reduce((a,b)=>({contract:a.contract+b.contract, net:a.net+b.net, units:a.units+b.units}),{contract:0,net:0,units:0});
+const gmt    = (y,m)   => allProjects.reduce((a,p)=>{const e=ge(y,p,m);return{contract:a.contract+e.contract, net:a.net+e.net, units:a.units+e.units};},{contract:0,net:0,units:0});
+const gyt    = y       => allProjects.reduce((a,p)=>{const t=gpt(y,p);return{contract:a.contract+t.contract, net:a.net+t.net, units:a.units+t.units};},{contract:0,net:0,units:0});
+// shorthand: get active revenue from aggregated object
+const rev    = obj     => obj[priceMode] || 0;
 const yoy    = (c,p)   => p?((c-p)/p*100):null;
 const ystr   = pct     => pct===null?'—':`${pct>=0?'+':''}${pct.toFixed(1)}%`;
 const ycls   = pct     => pct===null?'bz':pct>=0?'bp':'bn';
@@ -336,24 +360,26 @@ function renderYearTabs(){
 function renderKPIs(){
   const py=selYear-1;
   const ct=gyt(selYear),pt=gyt(py);
-  const revPct=yoy(ct.rev,pt.rev),unitPct=yoy(ct.units,pt.units);
+  const ctRev=rev(ct),ptRev=rev(pt);
+  const revPct=yoy(ctRev,ptRev),unitPct=yoy(ct.units,pt.units);
   const ap=allProjects.filter(p=>gpt(selYear,p).units>0).length;
   const app=allProjects.filter(p=>gpt(py,p).units>0).length;
   let bm=0,bRev=0,bUnits=0;
-  for(let m=1;m<=12;m++){const r=gmt(selYear,m);if(r.rev>bRev){bRev=r.rev;bUnits=r.units;bm=m;}}
+  for(let m=1;m<=12;m++){const r=gmt(selYear,m);const rv=rev(r);if(rv>bRev){bRev=rv;bUnits=r.units;bm=m;}}
   const uByM=Array.from({length:12},(_,i)=>gmt(selYear,i+1).units);
   const maxU=Math.max(...uByM,1);
   const spark=uByM.map((u,i)=>`<div class="unit-mini-bar" title="${ME[i+1]}: ${u} units" style="height:${Math.max(2,Math.round((u/maxU)*26))}px;background:rgba(16,185,129,${u>0?0.85:0.2});"></div>`).join('');
-  const avgR=ct.units>0?ct.rev/ct.units:0,pAvgR=pt.units>0?pt.rev/pt.units:0;
+  const avgR=ct.units>0?ctRev/ct.units:0,pAvgR=pt.units>0?ptRev/pt.units:0;
   const avgPct=yoy(avgR,pAvgR);
+  const modeLabel = priceMode==='contract' ? 'ราคาหน้าสัญญา' : 'ราคาสุทธิ';
 
   document.getElementById('kpiSection').innerHTML=`
-    <div class="kpi-section-label">Revenue Summary</div>
+    <div class="kpi-section-label">Revenue Summary · ${modeLabel}</div>
     <div class="kpi-row revenue-row">
       <div class="kpi-card purple">
         <div class="kpi-label">Total Revenue ${selYear} — All Projects</div>
-        <div class="kpi-value">฿${fmt(ct.rev)}</div>
-        <div class="kpi-footer"><span class="kpi-yoy ${ypill(revPct)}">${revPct===null?'No prior data':`${revPct>=0?'▲':'▼'} ${Math.abs(revPct).toFixed(1)}% YoY`}</span><span class="kpi-prev">vs ฿${fmt(pt.rev)}</span></div>
+        <div class="kpi-value">฿${fmt(ctRev)}</div>
+        <div class="kpi-footer"><span class="kpi-yoy ${ypill(revPct)}">${revPct===null?'No prior data':`${revPct>=0?'▲':'▼'} ${Math.abs(revPct).toFixed(1)}% YoY`}</span><span class="kpi-prev">vs ฿${fmt(ptRev)}</span></div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Peak Month ${selYear}</div>
@@ -401,15 +427,17 @@ function makeCard(proj,color,ai,isTotal){
   const py=selYear-1;
   const ct=isTotal?gyt(selYear):gpt(selYear,proj);
   const pt=isTotal?gyt(py):gpt(py,proj);
-  const revPct=yoy(ct.rev,pt.rev),unitPct=yoy(ct.units,pt.units);
+  const ctRev=rev(ct),ptRev=rev(pt);
+  const revPct=yoy(ctRev,ptRev),unitPct=yoy(ct.units,pt.units);
   let tCR=0,tPR=0,tCU=0,tPU=0;
   const rows=[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>{
-    const c=isTotal?gmt(selYear,m):{rev:grev(selYear,proj,m),units:gunit(selYear,proj,m)};
-    const p=isTotal?gmt(py,m):{rev:grev(py,proj,m),units:gunit(py,proj,m)};
-    if(!c.rev&&!p.rev&&!c.units&&!p.units)return'';
-    tCR+=c.rev;tPR+=p.rev;tCU+=c.units;tPU+=p.units;
-    const rp=yoy(c.rev,p.rev),up=yoy(c.units,p.units);
-    return `<tr><td>${MT[m]}</td><td>${c.rev?fmtF(c.rev):'—'}</td><td>${p.rev?fmtF(p.rev):'—'}</td><td class="${ycls(rp)}">${ystr(rp)}</td><td class="unit-cell">${c.units||'—'}</td><td class="unit-cell" style="color:var(--muted)">${p.units||'—'}</td><td class="${ycls(up)}">${ystr(up)}</td></tr>`;
+    const c=isTotal?gmt(selYear,m):{contract:grev(selYear,proj,m),net:grev(selYear,proj,m),units:gunit(selYear,proj,m)};
+    const p=isTotal?gmt(py,m):{contract:grev(py,proj,m),net:grev(py,proj,m),units:gunit(py,proj,m)};
+    const cR=rev(c),pR=rev(p);
+    if(!cR&&!pR&&!c.units&&!p.units)return'';
+    tCR+=cR;tPR+=pR;tCU+=c.units;tPU+=p.units;
+    const rp=yoy(cR,pR),up=yoy(c.units,p.units);
+    return `<tr><td>${MT[m]}</td><td>${cR?fmtF(cR):'—'}</td><td>${pR?fmtF(pR):'—'}</td><td class="${ycls(rp)}">${ystr(rp)}</td><td class="unit-cell">${c.units||'—'}</td><td class="unit-cell" style="color:var(--muted)">${p.units||'—'}</td><td class="${ycls(up)}">${ystr(up)}</td></tr>`;
   }).join('');
   const cid=`c_${isTotal?'_TOT_':proj.replace(/[\s\/\-]/g,'_')}`;
   const tp_r=yoy(tCR,tPR),tp_u=yoy(tCU,tPU);
@@ -418,8 +446,8 @@ function makeCard(proj,color,ai,isTotal){
     <div class="card-header">
       <div class="card-name-row"><div class="color-dot" style="background:${color}"></div><span class="card-project-name">${isTotal?'📊 Total — All Projects':proj}</span></div>
       <div class="card-stats">
-        <div class="stat-pill"><span class="pill-label">Revenue ${selYear}</span><span class="pill-val" style="color:${color}">฿${fmt(ct.rev)}</span><span class="pill-yoy ${ypill(revPct)}">${revPct===null?'N/A':`${revPct>=0?'▲':'▼'} ${Math.abs(revPct).toFixed(1)}%`}</span></div>
-        <div class="stat-pill"><span class="pill-label">Revenue ${py}</span><span class="pill-val" style="color:var(--muted)">฿${fmt(pt.rev)}</span></div>
+        <div class="stat-pill"><span class="pill-label">Revenue ${selYear}</span><span class="pill-val" style="color:${color}">฿${fmt(ctRev)}</span><span class="pill-yoy ${ypill(revPct)}">${revPct===null?'N/A':`${revPct>=0?'▲':'▼'} ${Math.abs(revPct).toFixed(1)}%`}</span></div>
+        <div class="stat-pill"><span class="pill-label">Revenue ${py}</span><span class="pill-val" style="color:var(--muted)">฿${fmt(ptRev)}</span></div>
         <div class="stat-pill" style="border-left-color:rgba(16,185,129,0.3)"><span class="pill-label" style="color:var(--accent3)">Units ${selYear}</span><span class="pill-val" style="color:var(--accent3)">${ct.units}</span><span class="pill-yoy ${ypill(unitPct)}">${unitPct===null?'N/A':`${unitPct>=0?'▲':'▼'} ${Math.abs(unitPct).toFixed(1)}%`}</span></div>
         <div class="stat-pill"><span class="pill-label" style="color:var(--muted)">Units ${py}</span><span class="pill-val" style="color:var(--muted)">${pt.units}</span></div>
       </div>
@@ -441,8 +469,8 @@ function drawChart(proj,color,isTotal){
   const py=selYear-1;
   const cid=`c_${isTotal?'_TOT_':proj.replace(/[\s\/\-]/g,'_')}`;
   const canvas=document.getElementById(cid);if(!canvas)return;
-  const rC=ME.slice(1).map((_,i)=>{const e=isTotal?gmt(selYear,i+1):{rev:grev(selYear,proj,i+1)};return e.rev||null;});
-  const rP=ME.slice(1).map((_,i)=>{const e=isTotal?gmt(py,i+1):{rev:grev(py,proj,i+1)};return e.rev||null;});
+  const rC=ME.slice(1).map((_,i)=>{ const e=isTotal?gmt(selYear,i+1):null; return e?rev(e)||null:grev(selYear,proj,i+1)||null; });
+  const rP=ME.slice(1).map((_,i)=>{ const e=isTotal?gmt(py,i+1):null; return e?rev(e)||null:grev(py,proj,i+1)||null; });
   const uC=ME.slice(1).map((_,i)=>isTotal?gmt(selYear,i+1).units||null:gunit(selYear,proj,i+1)||null);
   const key=isTotal?'__TOT__':proj;
   CI[key]=new Chart(canvas.getContext('2d'),{
@@ -527,4 +555,5 @@ function togglePw() {
 </script>
 </body>
 </html>
+
 
