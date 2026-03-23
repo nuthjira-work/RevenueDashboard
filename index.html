@@ -431,8 +431,8 @@ function makeCard(proj,color,ai,isTotal){
   const revPct=yoy(ctRev,ptRev),unitPct=yoy(ct.units,pt.units);
   let tCR=0,tPR=0,tCU=0,tPU=0;
   const rows=[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>{
-    const c=isTotal?gmt(selYear,m):{contract:grev(selYear,proj,m),net:grev(selYear,proj,m),units:gunit(selYear,proj,m)};
-    const p=isTotal?gmt(py,m):{contract:grev(py,proj,m),net:grev(py,proj,m),units:gunit(py,proj,m)};
+    const c=isTotal?gmt(selYear,m):ge(selYear,proj,m);
+    const p=isTotal?gmt(py,m):ge(py,proj,m);
     const cR=rev(c),pR=rev(p);
     if(!cR&&!pR&&!c.units&&!p.units)return'';
     tCR+=cR;tPR+=pR;tCU+=c.units;tPU+=p.units;
@@ -555,5 +555,6 @@ function togglePw() {
 </script>
 </body>
 </html>
+
 
 
